@@ -1,0 +1,223 @@
+import math
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+
+import pymysql
+import pandas as pd
+import requests
+from requests.sessions import Session, session
+import openpyxl
+import json
+import time
+from datetime import datetime
+from http.cookiejar import CookieJar
+import smtplib
+import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import tempfile
+
+
+def save_sql(boatdate,start_port,end_port,boatprice,boattype,updatetime):
+    db = pymysql.connect(
+        host = '127.0.0.1',
+        port = 3306,
+        user = 'root',
+        password = '123456',
+        database = 'student'
+    )
+    cur = db.cursor()
+    sql = f"INSERT INTO mes(boatdate, start_port, end_port, boatprice,boattype,updatetime) VALUES (%s, %s, %s, %s, %s, %s)"
+    values = (boatdate,start_port,end_port,boatprice,boattype,updatetime)
+    cur.execute(sql,values)
+    db.commit()
+    cur.close()
+session = requests.Session()
+today = datetime.now()
+updatetime = today.strftime('%Y-%m-%d')
+session = requests.Session()
+cookie_jar = CookieJar()
+with requests.Session() as session:
+    session.cookies = cookie_jar
+login_url = 'https://mymsc.msccargo.cn/mymsc/Account/LogOnFromHomePage'
+login_data = {
+    'UserName': 'op05@space-chain.cn',
+    'Password': 'msc888888Aa!',
+    'RememberMyUserName': False
+}
+login_response = session.post(login_url, data=login_data)
+for cookie in session.cookies:
+    print(f'Cookie:{cookie.name} = {cookie.value}')
+response = session.get('https://mymsc.msccargo.cn/mymsc/Token/GetAccessToken')
+print(response.json())
+auth = response.json()['AccessToken']
+print(auth)
+
+headers = {
+    'Authorization':'Bearer ' +auth
+    }
+
+
+excel_file_path = r"C:\Users\ABC\Desktop\base_port.xlsx"
+df = pd.read_excel(excel_file_path, engine='openpyxl')
+data = []
+for index, row in df.iterrows():
+    end_port_id = row['mscportofdischargeid']
+
+
+    if not math.isnan(end_port_id):
+        end_port_id = int('%.0f' % end_port_id)
+        def boxtype(n):
+            if n == '40HC':
+                return 2
+            elif n == '20ST':
+                return 0
+            elif n == '45HC':
+                return 1
+        index = boxtype(n=row['equipmentsizetype'])
+        other_url = 'https://services-mymsc.msccargo.cn/quote/graphql'
+        pylod = {
+            "query": "\n    query InstantQuoteSearchV5($input: RateCardSearchCriteriaInput!) {\n  searchRateCardsV5(request: $input) {\n    myMscId\n    shippingWindowBasedGroups {\n      validFrom\n      validTo\n      quoteExpiration\n      totalMinTransitDays\n      totalMaxTransitDays\n      oceanTranshipmentModes\n      sizeTypeAndBestPrices {\n        sizeType\n        price\n        currency\n      }\n      rateCards {\n        myMscId\n        rateValidity\n        quoteExpiration\n        sizeType\n        oceanRateValidFrom\n        oceanRateValidTo\n        inlandTransitDays\n        quantity\n        isSelected\n        total\n        unitTotal\n        subTotal\n        shipmentTerm\n        currency\n        tariffId\n        commodityGroup\n        weight\n        weightUnit\n        reference\n        quoteIssued\n        comments\n        temperatureUnit\n        externalReference\n        rateCardType\n        paymentMethods\n        publicationChannel\n        totalAmountPerBillOfLading\n        totalAmountPerEquipment\n        convertedTemperatureUnit\n        minTemperature\n        maxTemperature\n        temperatureUnit\n        convertedMinTemperature\n        convertedMaxTemperature\n        convertedMinWeight\n        convertedMaxWeight\n        convertedWeightUnit\n        hasChargesPaymentMethods\n        commodityHarmonizedSystemCodesExclusions {\n          harmonizedSystemCodeId\n          nomenclatureCode\n        }\n        containerSpecifications {\n          containerSizeTypeId\n          isNonOperatingReefer\n          sizeAndType\n        }\n        origin {\n          inland {\n            id\n            name\n            longDisplayName\n            transportationMode\n            transitTimeDays\n            transportationMode\n            zipcode\n            depotLocationName\n            depotLocationUnCode\n            countryCode\n            unCode\n            stateCode\n          }\n          port {\n            id\n            name\n            unCode\n            longDisplayName\n            countryCode\n          }\n        }\n        destination {\n          inland {\n            id\n            name\n            longDisplayName\n            transportationMode\n            transitTimeDays\n            zipcode\n            depotLocationName\n            depotLocationUnCode\n            countryCode\n            unCode\n            stateCode\n          }\n          port {\n            id\n            name\n            unCode\n            longDisplayName\n            countryCode\n          }\n        }\n        chargesGroup {\n          chargeType\n          charges {\n            myMscId\n            chargeDescription\n            allowedPaymentMethods\n            selectedPaymentMethod\n            isFollowingFreightPaymentMethod\n            isIncludedInFreight\n            addToFreightRate\n            isLia\n            chargeLevel\n            amountConvertedToFreightChargeCurrency\n            commentsAndConditions\n            validFrom\n            validTo\n            chargeType\n            longDisplayName\n            reference\n            currency\n            amount\n            freightAmount\n            applicability\n            applicabilityToFreightAmount\n            chargeCodeId\n            code\n            dtx\n            calculationMethod\n            calculationMethodAmount\n            calculationType\n            calculationWeightUnit\n            isToBeCalculated\n            bookingSourceType\n            shippingInstructionsSourceType\n            isLocal\n            isPaidWithFreight\n            isCancellationFee\n            isNoShowFee\n            isElectronicBillOfLading\n            isConditionalTariffCharge\n            isCommodityConditionalChargeBased\n          }\n          defaultPaymentMethod\n          selectedPaymentMethod\n        }\n        scheduleInformation {\n          vesselTransitTimeInMinutes\n          oceanTransitDays\n          vesselTransitTime\n          vesselRouteList\n          oceanTranshipmentMode\n          totalTransitDays\n          departureDate\n          arrivalDate\n          serviceName\n          legsDetails {\n            legSequence\n            maritimeServiceName\n            arrivalPortName\n          }\n        }\n        freeTimeInformation {\n          import {\n            type\n            text\n          }\n          export {\n            type\n            text\n          }\n        }\n      }\n    }\n    vesselBasedGroups {\n      oceanTranshipmentMode\n      vessel {\n        imoNumber\n        name\n        vesselId\n        voyageCode\n      }\n      sizeTypeAndBestPrices {\n        sizeType\n        price\n        currency\n      }\n      rateCards {\n        myMscId\n        rateValidity\n        quoteExpiration\n        sizeType\n        oceanRateValidFrom\n        oceanRateValidTo\n        inlandTransitDays\n        quantity\n        isSelected\n        total\n        unitTotal\n        subTotal\n        shipmentTerm\n        currency\n        tariffId\n        commodityGroup\n        weight\n        weightUnit\n        reference\n        quoteIssued\n        comments\n        temperatureUnit\n        externalReference\n        rateCardType\n        paymentMethods\n        publicationChannel\n        totalAmountPerBillOfLading\n        totalAmountPerEquipment\n        convertedTemperatureUnit\n        minTemperature\n        maxTemperature\n        temperatureUnit\n        convertedMinTemperature\n        convertedMaxTemperature\n        convertedMinWeight\n        convertedMaxWeight\n        convertedWeightUnit\n        hasChargesPaymentMethods\n        commodityHarmonizedSystemCodesExclusions {\n          harmonizedSystemCodeId\n          nomenclatureCode\n        }\n        containerSpecifications {\n          containerSizeTypeId\n          isNonOperatingReefer\n          sizeAndType\n        }\n        origin {\n          inland {\n            id\n            name\n            longDisplayName\n            transportationMode\n            transitTimeDays\n            transportationMode\n            zipcode\n            depotLocationName\n            depotLocationUnCode\n            countryCode\n            unCode\n            stateCode\n          }\n          port {\n            id\n            name\n            unCode\n            longDisplayName\n            countryCode\n          }\n        }\n        destination {\n          inland {\n            id\n            name\n            longDisplayName\n            transportationMode\n            transitTimeDays\n            zipcode\n            depotLocationName\n            depotLocationUnCode\n            countryCode\n            unCode\n            stateCode\n          }\n          port {\n            id\n            name\n            unCode\n            longDisplayName\n            countryCode\n          }\n        }\n        chargesGroup {\n          chargeType\n          charges {\n            myMscId\n            chargeDescription\n            allowedPaymentMethods\n            selectedPaymentMethod\n            isFollowingFreightPaymentMethod\n            isIncludedInFreight\n            addToFreightRate\n            isLia\n            chargeLevel\n            amountConvertedToFreightChargeCurrency\n            commentsAndConditions\n            validFrom\n            validTo\n            chargeType\n            longDisplayName\n            reference\n            currency\n            amount\n            freightAmount\n            applicability\n            applicabilityToFreightAmount\n            chargeCodeId\n            code\n            dtx\n            calculationMethod\n            calculationMethodAmount\n            calculationType\n            calculationWeightUnit\n            isToBeCalculated\n            bookingSourceType\n            shippingInstructionsSourceType\n            isLocal\n            isPaidWithFreight\n            isCancellationFee\n            isNoShowFee\n            isElectronicBillOfLading\n            isConditionalTariffCharge\n            isCommodityConditionalChargeBased\n          }\n          defaultPaymentMethod\n          selectedPaymentMethod\n        }\n        scheduleInformation {\n          vesselTransitTimeInMinutes\n          oceanTransitDays\n          vesselTransitTime\n          vesselRouteList\n          oceanTranshipmentMode\n          totalTransitDays\n          departureDate\n          arrivalDate\n          serviceName\n          legsDetails {\n            legSequence\n            maritimeServiceName\n            arrivalPortName\n          }\n        }\n        freeTimeInformation {\n          import {\n            type\n            text\n          }\n          export {\n            type\n            text\n          }\n        }\n        vessel {\n          imoNumber\n          name\n          vesselId\n          voyageCode\n        }\n      }\n    }\n    rateCardSearchCriteria {\n      weightUnit\n      portOrLocationAtOrigin {\n        id\n        portId\n        name\n        longDisplayName\n        unCode\n        zipcode\n        isInlandLocation\n        transportationMode\n        countryCode\n        cargoCountry {\n          countryId\n          longDisplayName\n          name\n          isoAlpha2Code\n        }\n      }\n      cargoValue\n      portOrLocationAtDestination {\n        id\n        portId\n        name\n        longDisplayName\n        unCode\n        zipcode\n        isInlandLocation\n        transportationMode\n        countryCode\n        cargoCountry {\n          countryId\n          longDisplayName\n          name\n          isoAlpha2Code\n        }\n      }\n      equipmentFilter {\n        equipmentType\n        weightValue\n      }\n      validTo\n      validFrom\n      commodityGroupCode\n      commodityGroupDescription\n      temperature\n      temperatureUnit\n    }\n    searchErrorInfo {\n      errorId\n      errorDescription\n    }\n  }\n  defaultMscCompanyForUser {\n    name\n    companyAddress\n    mscCode\n    isDefaultCompany\n    agency\n    agencyId\n    agencyIdCompanyCode\n  }\n}\n    ",
+            "variables": {
+                "input": {
+                    "originId": 1247,
+                    "isOriginAPort": True,
+                    "destinationId": end_port_id,
+                    "isDestinationAPort": True,
+                    "originTransportationMode": "",
+                    "destinationTransportationMode": "",
+                    "originZipcode": "",
+                    "destinationZipcode": "",
+                    "equipmentFilter": [
+                        {
+                            "equipmentType": "20DV",
+                            "weightValue": 18000
+                        },
+                        {
+                            "equipmentType": "40DV",
+                            "weightValue": 18000
+                        },
+                        {
+                            "equipmentType": "40HC",
+                            "weightValue": 18000
+                        }
+                    ],
+                    "weightUnit": "Kgs",
+                    "commodityGroupCode": "",
+                    "temperature": None,
+                    "temperatureUnit": None,
+                    "cargoValue": None,
+                    "cargoDestinationCountryId": 75,
+                    "cargoOriginCountryId": 46,
+                    "commodityGroupDescription": ""
+                }
+            },
+            "operationName": "InstantQuoteSearchV5"
+        }
+        time.sleep(4)
+        pay_load = session.post(url = other_url, json = pylod, headers = headers)
+        pay_load_dict = json.loads(pay_load.text)
+        print(pay_load.status_code)
+        if pay_load.status_code == 200:
+            if 'data' in pay_load_dict and 'searchRateCardsV5' in pay_load_dict['data'] and'shippingWindowBasedGroups' in pay_load_dict['data']['searchRateCardsV5']:
+                if len(pay_load_dict['data']['searchRateCardsV5']['shippingWindowBasedGroups']) > 0:
+                    boatdate = pay_load_dict['data']['searchRateCardsV5']['shippingWindowBasedGroups'][0]['quoteExpiration']
+                    boatdate = datetime.strptime(boatdate, "%d %b %Y")
+                    boatdate = boatdate.strftime("%Y-%m-%d")
+                else:
+                    boatdate = 'null'
+
+            else:
+                boatdate = 'null'
+
+            print(boatdate)
+
+            start_port = 'NINGBO'
+            print(start_port)
+            end_port = row['pricinggroupid']
+            print(end_port)
+            boattype = row['equipmentsizetype']
+            print(boattype)
+            #print(pay_load_dict)
+            try:
+                if index is not None:
+                    if 'searchRateCardsV5' in pay_load_dict['data'] and 'vesselBasedGroups' in pay_load_dict['data']['searchRateCardsV5'] and pay_load_dict['data']['searchRateCardsV5']['vesselBasedGroups']:
+                        if len(pay_load_dict['data']['searchRateCardsV5']['vesselBasedGroups'])>0:
+                            boatprice = pay_load_dict['data']['searchRateCardsV5']['vesselBasedGroups'][0]['sizeTypeAndBestPrices'][index]['price']
+                    elif 'searchRateCardsV5' in pay_load_dict['data'] and 'shippingWindowBasedGroups' in pay_load_dict['data']['searchRateCardsV5'] and pay_load_dict['data']['searchRateCardsV5']['shippingWindowBasedGroups']:
+                        if len(pay_load_dict['data']['searchRateCardsV5']['shippingWindowBasedGroups'])>0:
+                            boatprice = pay_load_dict['data']['searchRateCardsV5']['shippingWindowBasedGroups'][0]['sizeTypeAndBestPrices'][index]['price']
+                    else:
+                        boatprice = 0
+
+                print(boatprice)
+            except Exception as e:
+                boatprice = 0
+                print('something wrong')
+        else:
+            boatdate = 'null'
+            start_port = 'NINGBO'
+            end_port = row['pricinggroupid']
+            boatprice = 0
+            boattype = row['equipmentsizetype']
+            updatetime = updatetime
+    else:
+        boatdate = 'null'
+        start_port = 'NINGBO'
+        end_port = row['pricinggroupid']
+        boatprice = 0
+        boattype = row['equipmentsizetype']
+        updatetime = updatetime
+    boat_info = {
+        "船期": boatdate,
+        "起始港": start_port,
+        "目的港": end_port,
+        "箱型": boattype,
+        "价格": boatprice,
+        "更新日期": updatetime
+    }
+    data.append(boat_info)
+
+
+save_sql(boatdate=boatdate,start_port=start_port,end_port=end_port,boattype = boattype,boatprice=boatprice,updatetime = updatetime)
+df_result = pd.DataFrame(data)
+with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as tmp_file:
+    excel_path = 'mscboats_information.xlsx'
+    df_result.to_excel(excel_path, index=False)
+    smtp_server = 'smtp.163.com'  # 163邮箱的SMTP服务器
+    sender_email = 'xxxxxer1234@163.com'  # 发件人邮箱账号
+    receiver_email = '2429071228@qq.com'  # 收件人邮箱账号
+    password = 'NUNQjtD9VtFdtj9w'
+    body = 'msc船舶信息'
+
+    message = MIMEMultipart()
+    message['From'] = sender_email
+    message['To'] = receiver_email
+    message['Subject'] = updatetime
+
+    message.attach(MIMEText(body, 'plain'))
+    attachment_path = excel_path
+    # 添加附件
+    with open(attachment_path, 'rb') as attachment:
+        part = MIMEBase('application', 'octet-stream')
+        part.set_payload(attachment.read())
+        encoders.encode_base64(part)
+        part.add_header('Content-Disposition', f'attachment; filename= {os.path.basename(attachment_path)}')
+        message.attach(part)
+
+    # 发送邮件
+    try:
+        server = smtplib.SMTP_SSL(smtp_server, 587)  # 使用SSL加密
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, message.as_string())
+        print("邮件发送成功")
+    except Exception as e:
+        print("邮件发送失败", e)
+    finally:
+        server.quit()
+print(data)
+os.remove(excel_path)
+
